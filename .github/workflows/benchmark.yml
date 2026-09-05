@@ -63,6 +63,8 @@ jobs:
           fi
           asv update --config "$ASV_CONFIG"
           asv publish --config "$ASV_CONFIG" -v
+          # Remove stale graphs that no longer match the generated report index.
+          rsync -r --delete benchmarks/html/graphs/ benchmark-site/graphs/
           cp -r benchmarks/html/. benchmark-site/
           cp -r benchmarks/results benchmark-site/
 
