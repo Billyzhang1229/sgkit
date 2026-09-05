@@ -3,17 +3,17 @@ name: Benchmarks
 on:
   push:
     branches:
-      - main
+      - test/benchmarks-validation
 
 env:
-  BENCHMARKS_REPO: sgkit-dev/sgkit-benchmarks-asv
+  BENCHMARKS_REPO: Billyzhang1229/sgkit-benchmarks-asv
   ASV_CONFIG: benchmarks/asv.conf.json
   MACHINE_NAME: github-actions  # to identify github actions machine as hostname changes everytime
 
 jobs:
   build:
-    # This workflow only runs on the origin org
-    if: github.repository_owner == 'sgkit-dev'
+    # Isolated validation against the fork's benchmark results repository.
+    if: github.repository_owner == 'Billyzhang1229'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,7 +48,7 @@ jobs:
         with:
           repository: ${{ env.BENCHMARKS_REPO }}
           ref: main
-          token: ${{ secrets.GH_TOKEN }}
+          ssh-key: ${{ secrets.BENCHMARK_VALIDATION_SSH_KEY }}
           path: benchmark-site
 
       - name: Publish benchmarks with historical results
