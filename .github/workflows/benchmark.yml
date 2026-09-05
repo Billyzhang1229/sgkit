@@ -6,7 +6,6 @@ on:
       - main
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
   BENCHMARKS_REPO: sgkit-dev/sgkit-benchmarks-asv
   ASV_CONFIG: benchmarks/asv.conf.json
   MACHINE_NAME: github-actions  # to identify github actions machine as hostname changes everytime
@@ -20,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # To fetch all commits to be able to generate benchmarks html
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -38,31 +37,44 @@ jobs:
           rm ~/.asv-machine.json
 
           echo "Setting machine name to $MACHINE_NAME"
-          asv machine --machine $MACHINE_NAME --yes --config $ASV_CONFIG -v
+          asv machine --machine "$MACHINE_NAME" --yes --config "$ASV_CONFIG" -v
 
       - name: Run benchmarks
         run: |
-          asv run --config $ASV_CONFIG -v
+          asv run --config "$ASV_CONFIG" -v
 
-      - name: Copy benchmarks to benchmarks repo directory
+      - name: Checkout benchmark results
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.BENCHMARKS_REPO }}
+          ref: main
+          token: ${{ secrets.GH_TOKEN }}
+          path: benchmark-site
+
+      - name: Publish benchmarks with historical results
         run: |
-          git clone https://$GITHUB_TOKEN@github.com/$BENCHMARKS_REPO.git ~/$BENCHMARKS_REPO
-          RESULTS_DIR=~/$BENCHMARKS_REPO/results
+          RESULTS_DIR="benchmark-site/results/$MACHINE_NAME"
           if [ -d "$RESULTS_DIR" ]
           then
-            cp -r $RESULTS_DIR/$MACHINE_NAME/* benchmarks/results/$MACHINE_NAME/
+            # Preserve the current run's results and machine configuration.
+            rsync -r --ignore-existing "$RESULTS_DIR/" "benchmarks/results/$MACHINE_NAME/"
           else
-            echo "results/ directory does not exist in the benchmarks repository"
+            echo "No historical results for $MACHINE_NAME"
           fi
-          asv publish --config $ASV_CONFIG -v
-          cp -r benchmarks/html/* ~/$BENCHMARKS_REPO/
-          cp -r benchmarks/results ~/$BENCHMARKS_REPO/
+          asv update --config "$ASV_CONFIG"
+          asv publish --config "$ASV_CONFIG" -v
+          cp -r benchmarks/html/. benchmark-site/
+          cp -r benchmarks/results benchmark-site/
 
       - name: Push benchmarks
+        working-directory: benchmark-site
         run: |
-          cd ~/$BENCHMARKS_REPO
           git add .
-          git config --global user.email "project@sgkit.dev"
-          git config --global user.name "sgkit benchmark bot"
+          if git diff --cached --quiet; then
+            echo "No benchmark changes to publish"
+            exit 0
+          fi
+          git config user.email "project@sgkit.dev"
+          git config user.name "sgkit benchmark bot"
           git commit -m "Update benchmarks"
           git push origin main
