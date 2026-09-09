@@ -25,7 +25,7 @@ dependencies = [
   "numpy >= 2.0; sys_platform != \"darwin\"",
   "xarray < 2025.03.1",
   "dask[array,dataframe] >= 2022.01.0, <= 2024.8.0",
-  "scipy < 1.16",
+  "scipy < 1.17",
   "zarr >= 2.10.0, != 2.11.0, != 2.11.1, != 2.11.2, < 3",
   "numba",
   "fsspec != 2021.6.*",
@@ -55,6 +55,47 @@ content-type = "text/x-rst"
 # since this is the least user invasive solution.
 plink = ["partd", "bed-reader"]
 bgen = ["rechunker", "cbgen > 1.0.5"]
+
+[dependency-groups]
+dev = [
+  "packaging",
+  "callee",
+  "pre-commit",
+  "pytest",
+  "pytest-cov",
+  "pytest-datadir",
+  "pytest-mock",
+  "hypothesis",
+  "scikit-allel",
+  "statsmodels >= 0.14.5",
+  "msprime>=1.0",
+  "bio2zarr[vcf]; platform_system != \"Windows\"",
+  "yarl",
+  "matplotlib",
+  "networkx",
+  "aiohttp",
+  "requests",
+  "graphviz",
+]
+docs = [
+  "myst_nb",
+  "pydata-sphinx-theme",
+  "sphinx < 9.0.0",
+  "sphinx_autodoc_typehints",
+  "sphinx-copybutton",
+  "scanpydoc",
+  "ipython",
+  "matplotlib",
+  "seaborn",
+  "ablog!=0.10.27",
+  "pickleshare",
+]
+build = [
+  "twine",
+]
+
+[tool.uv]
+required-version = ">=0.12.10"
 
 [tool.setuptools]
 packages = ["sgkit"]

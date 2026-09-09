@@ -22,13 +22,22 @@ jobs:
       uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.0.1
+      with:
+        version: "0.12.10"
+        python-version: ${{ matrix.python-version }}
+        enable-cache: true
 
     - name: Install deps and sgkit
       run: |
-        python -m pip install --upgrade pip packaging
-        python .github/scripts/upstream_install.py
+        uv venv --python "${{ matrix.python-version }}"
+        uv pip install --python .venv/bin/python \
+          -r pyproject.toml --all-extras --group dev \
+          --overrides .github/upstream-overrides.txt --upgrade
+        uv pip install --python .venv/bin/python --no-deps -e .
 
     - name: Test with pytest
       run: |
-        python -m pip freeze
-        pytest -v
+        uv pip freeze --python .venv/bin/python
+        uv run --no-sync pytest -v

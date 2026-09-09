@@ -88,15 +88,21 @@ Contributions to *sgkit* can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-You can install the necessary requirements using pip::
+Install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_
+(version 0.12.10 or newer; CI uses 0.12.10), then create the development environment::
 
   cd sgkit
-  pip install -r requirements.txt -r requirements-dev.txt -r requirements-doc.txt
+  uv sync --locked --all-extras
 
+This installs sgkit in editable mode, its ``bgen`` and ``plink`` extras, and the
+``dev`` dependency group into ``.venv``. The tracked ``.python-version`` selects
+Python 3.12; uv can download it when needed. To use another supported version,
+pass ``--python 3.11`` to both ``uv sync`` and ``uv run``. CI tests Python 3.11
+and 3.12, with additional versions in the upstream compatibility workflow.
 
-Then install the `sgkit` in [editable mode](https://pip.pypa.io/en/stable/cli/pip_install/#editable-installs)
-
-  pip install -e .
+Use ``uv run`` to execute commands in this environment without activating it.
+Documentation dependencies and their Dask override use a separate environment,
+as described in :ref:`contributing_docs`.
 
 
 If you have a Nvidia GPU you will need to make sure that it is configured properly,
@@ -104,9 +110,9 @@ as in you have cudatoolkit installed, the instructions for the same can be found
 `nvidia docs. <https://developer.nvidia.com/cuda-toolkit>`_
 
 
-Also install pre-commit, which is used to enforce coding standards::
+Install the Git hooks used to enforce coding standards::
 
-   pre-commit install
+   uv run --locked --all-extras pre-commit install
 
 
 Run tests
@@ -115,7 +121,7 @@ Run tests
 *sgkit* uses pytest_ for testing.  You can run tests from the main ``sgkit`` directory
 as follows::
 
-   pytest
+   uv run --locked --all-extras pytest
 
 .. _pytest: https://docs.pytest.org/en/latest/
 
@@ -143,7 +149,7 @@ and for the future.
 Test coverage must be 100% for code to be accepted. You can measure the coverage
 on your local machine by running::
 
-   pytest --cov=sgkit --cov-report=html
+   uv run --locked --all-extras pytest --cov=sgkit --cov-report=html
 
 A report will be written in the ``htmlcov`` directory that will show any lines that
 are not covered by tests.
@@ -186,8 +192,8 @@ after the line.
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
 Docstrings are tested by CI. You can test them locally
-by running ``pytest`` (this works because the ``--doctest-modules`` option is automatically added
-in the *setup.cfg* file).
+by running ``uv run --locked --all-extras pytest`` (the ``--doctest-modules`` option
+is configured in ``pyproject.toml``).
 
 
 Coding standards
@@ -207,11 +213,11 @@ if the change passes all the checks. It is also run for pull requests using CI.
 To manually enforce (or check) the source code adheres to our coding standards without
 doing a git commit, run::
 
-   pre-commit run --all-files
+   uv run --locked --all-extras pre-commit run --all-files
 
 To run a specific tool (``black``/``flake8``/``isort``/``mypy`` etc)::
 
-   pre-commit run black --all-files
+   uv run --locked --all-extras pre-commit run black --all-files
 
 You can omit ``--all-files`` to only check changed files.
 
@@ -241,18 +247,54 @@ and specifically a very handy `interactive rebase doc <https://git-scm.com/book/
 Python dependencies
 ~~~~~~~~~~~~~~~~~~~
 
-Python runtime dependencies are listed in ``requirements.txt`` and ``setup.cfg``, so if you update a
-dependency, or add a new one, then don't forget to change both files. We try to keep the use of pinning
-(to exclude particular version numbers) to a minimum, but sometimes this is unavoidable due to bugs or conflicts.
+Dependency declarations live in ``pyproject.toml``. Runtime requirements belong in
+``project.dependencies`` and public extras in ``project.optional-dependencies``.
+The ``dev``, ``docs``, and ``build`` dependency groups contain contributor tools
+and are not published as runtime requirements. Keep runtime bounds as broad as
+compatibility allows; exact environment versions belong in ``uv.lock``.
 
-After a release, the release manager will update the corresponding dependencies in the
-`conda-forge feedstock <https://github.com/conda-forge/sgkit-feedstock>`_.
+For example, add dependencies with::
 
-There is a `GitHub Action <https://github.com/sgkit-dev/sgkit/actions/workflows/upstream.yml>`_ that runs every night
-against the main branches of our key upstream dependencies. This is useful for finding any breaking changes that would
-affect *sgkit*, so we can report or try to fix the problem before the upstream library is released.
+   uv add 'package>=1.0'
+   uv add --group dev package
+   uv add --group docs package
 
-Build dependencies are listed in ``requirements-dev.txt`` and ``requirements-doc.txt``.
+After editing dependency declarations directly, run ``uv lock``. Include both
+``pyproject.toml`` and ``uv.lock`` in the change. Normal development and CI use
+``--locked`` so stale lockfiles fail rather than being silently rewritten.
+To refresh a particular dependency and test the resulting environment::
+
+   uv lock --upgrade-package package
+   uv sync --locked --all-extras
+   uv run --locked --all-extras pytest
+
+Use ``uv lock --upgrade --no-build-package scipy`` only for an intentional full
+dependency refresh.
+Scheduled core CI runs refresh dependencies within the declared bounds in their
+disposable checkouts; these runs do not commit lockfile updates. Fresh CI installs
+and scheduled refreshes require a compatible SciPy wheel to avoid obsolete source
+releases with overly broad Python/NumPy metadata. Upstream CI
+separately tests the five Git sources in ``.github/upstream-overrides.txt``,
+while preserving the declared bounds for other dependencies. Cubed and Zarr 3 jobs
+also apply explicit overrides. Those jobs use ``uv pip`` against their selected
+interpreter and ``uv run --no-sync`` afterwards to retain the overridden versions.
+
+Consumers that need a requirements file can generate one without maintaining a
+second dependency list::
+
+   uv export --locked --all-extras --format requirements-txt -o requirements-export.txt
+
+After a release, the release manager updates the corresponding dependencies in
+the `conda-forge feedstock <https://github.com/conda-forge/sgkit-feedstock>`_.
+
+Build and check release artifacts with::
+
+   uv build --no-sources
+   uv run --locked --only-group build twine check --strict dist/*
+
+The setuptools build backend and setuptools-scm version generation are retained.
+
+.. _contributing_docs:
 
 
 Contributing to documentation
@@ -266,20 +308,33 @@ and API documentation.
 Building the documentation requires the Graphviz ``dot`` executable, which you
 can install by following `these instructions <https://graphviz.org/download/#executable-packages>`_.
 
-You can build the documentation locally with ``make``::
+The docs currently need newer Dask and distributed than sgkit's declared runtime
+bounds. Keep this override in a separate environment so it does not affect unit
+tests. From the repository root, on macOS or Linux, run::
 
-   cd docs
-   make html
+   UV_PROJECT_ENVIRONMENT=.venv-docs uv sync --locked --all-extras --group docs
+   uv pip install --python .venv-docs/bin/python --upgrade dask distributed
+   UV_PROJECT_ENVIRONMENT=.venv-docs uv run --no-sync make -C docs html
 
-The resulting HTML files end up in the ``_build/html`` directory.
+On Windows, use PowerShell::
 
-You can now make edits to ``.rst`` files and run ``make html`` again to update
-the affected pages.
+   $env:UV_PROJECT_ENVIRONMENT = ".venv-docs"
+   uv sync --locked --all-extras --group docs
+   uv pip install --python .venv-docs/Scripts/python.exe --upgrade dask distributed
+   uv run --no-sync sphinx-build -b html -W --keep-going -n docs docs/_build/html
+   Remove-Item Env:UV_PROJECT_ENVIRONMENT
 
-The documentation build is checked by CI to ensure that it builds
-without warnings. You can do that locally with::
+Clearing the variable returns subsequent commands to the normal development
+environment.
 
-   make clean html SPHINXOPTS="-W --keep-going -n"
+The resulting HTML is in ``docs/_build/html``. After editing documentation, run
+the build command again. Keep ``--no-sync`` after applying the Dask override;
+re-syncing would restore the locked dependencies.
+
+CI checks documentation with warnings treated as errors. Run the same check
+locally with::
+
+   UV_PROJECT_ENVIRONMENT=.venv-docs uv run --no-sync make -C docs clean html SPHINXOPTS="-W --keep-going -n"
 
 .. _Sphinx: https://www.sphinx-doc.org/
 

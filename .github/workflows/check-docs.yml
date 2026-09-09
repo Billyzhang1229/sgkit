@@ -22,19 +22,24 @@ jobs:
       uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.0.1
+      with:
+        version: "0.12.10"
+        python-version: ${{ matrix.python-version }}
+        enable-cache: true
     - name: Install dependencies
       run: |
         sudo apt update -y
         sudo apt install graphviz  # Needed for documentation
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt -r requirements-dev.txt -r requirements-doc.txt
-        pip install -U dask distributed  # need latest versions to successully build docs
+        uv sync --locked --all-extras --group docs --python "${{ matrix.python-version }}"
+        # Docs deliberately exercise newer Dask than the supported runtime bound.
+        uv pip install --python .venv/bin/python --upgrade dask distributed
     - name: Run pre-commit
-      uses: pre-commit/action@v3.0.1
+      run: uv run --no-sync pre-commit run --all-files
     - name: Check for Sphinx doc warnings
       run: |
-        cd docs
-        make html SPHINXOPTS="-W --keep-going -n"
+        uv run --no-sync make -C docs html SPHINXOPTS="-W --keep-going -n"
     - uses: actions/upload-artifact@v7
       if: failure()
       with:

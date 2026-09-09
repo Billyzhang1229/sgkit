@@ -1,0 +1,6 @@
+dask[array,dataframe] @ git+https://github.com/dask/dask.git
+pandas @ git+https://github.com/pandas-dev/pandas.git
+rechunker @ git+https://github.com/pangeo-data/rechunker.git
+xarray @ git+https://github.com/pydata/xarray.git
+# Rechunker requires Zarr < 3; test the maintained Zarr 2 branch.
+zarr @ git+https://github.com/zarr-developers/zarr-python.git@support/v2
