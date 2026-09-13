@@ -98,7 +98,7 @@ This installs sgkit in editable mode, its ``bgen`` and ``plink`` extras, and the
 ``dev`` dependency group into ``.venv``. The tracked ``.python-version`` selects
 Python 3.12; uv can download it when needed. To use another supported version,
 pass ``--python 3.11`` to both ``uv sync`` and ``uv run``. CI tests Python 3.11
-and 3.12, with additional versions in the upstream compatibility workflow.
+and 3.12.
 
 Use ``uv run`` to execute commands in this environment without activating it.
 Documentation dependencies and their Dask override use a separate environment,
@@ -273,10 +273,8 @@ dependency refresh.
 Scheduled core CI runs refresh dependencies within the declared bounds in their
 disposable checkouts; these runs do not commit lockfile updates. Fresh CI installs
 and scheduled refreshes require a compatible SciPy wheel to avoid obsolete source
-releases with overly broad Python/NumPy metadata. Upstream CI
-separately tests the five Git sources in ``.github/upstream-overrides.txt``,
-while preserving the declared bounds for other dependencies. Cubed and Zarr 3 jobs
-also apply explicit overrides. Those jobs use ``uv pip`` against their selected
+releases with overly broad Python/NumPy metadata. Cubed and Zarr 3 jobs
+apply explicit overrides. Those jobs use ``uv pip`` against their selected
 interpreter and ``uv run --no-sync`` afterwards to retain the overridden versions.
 
 Consumers that need a requirements file can generate one without maintaining a
