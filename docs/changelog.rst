@@ -39,6 +39,9 @@ Breaking changes
   Numba's CUDA support.
 - :func:`pairwise_distance` treats infinite values as missing, like negative
   and nan values.
+- :func:`load_dataset` loads string variables such as ``variant_allele`` and
+  ``variant_id`` as NumPy ``StringDType`` arrays rather than object arrays.
+  Use ``.astype(object)`` to get object arrays. (:user:`jpfeuffer`, :pr:`1362`)
 
 Deprecations
 ~~~~~~~~~~~~

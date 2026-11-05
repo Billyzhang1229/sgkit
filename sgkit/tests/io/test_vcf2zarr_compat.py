@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-import xarray as xr
+import zarr
 
 pytest.importorskip("bio2zarr")
 from bio2zarr import vcf
@@ -16,6 +16,7 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from sgkit import load_dataset, save_dataset
 from sgkit.model import get_contigs, get_filters, num_contigs
+from sgkit.tests.io.test_dataset import assert_identical
 
 
 @pytest.mark.filterwarnings("ignore::xarray.coding.variables.SerializationWarning")
@@ -247,11 +248,10 @@ def test_vcf2zarr_compat(shared_datadir, tmp_path):
     # save and load again to test https://github.com/pydata/xarray/issues/3476
     path2 = tmp_path / "ds2.zarr"
     save_dataset(ds, path2)
-    ds2 = load_dataset(path2)
-    xr.testing.assert_identical(ds, ds2)
+    assert_identical(ds, load_dataset(path2))
+    # Some string variables load as objects however they are stored, so check
+    # the stored dtypes too
+    group = zarr.open_group(vcz_path, mode="r")
+    group2 = zarr.open_group(path2, mode="r")
     for name in ds:
-        if ds[name].dtype.kind == "T":
-            # Recent Xarray writes NumPy StringDType as fixed-width Unicode.
-            assert ds2[name].dtype.kind in ("T", "U")
-        else:
-            assert ds[name].dtype == ds2[name].dtype
+        assert group2[name].dtype == group[name].dtype

@@ -1,4 +1,5 @@
 import numcodecs
+import numpy as np
 import pytest
 import xarray as xr
 import zarr
@@ -12,7 +13,7 @@ from sgkit.testing import simulate_genotype_call_dataset
 def assert_identical(ds1: Dataset, ds2: Dataset) -> None:
     """Assert two Datasets are identical, including dtypes for all variables."""
     xr.testing.assert_identical(ds1, ds2)
-    assert all([ds1[v].dtype == ds2[v].dtype for v in ds1.data_vars])
+    assert all([ds1[v].dtype == ds2[v].dtype for v in ds1.variables])
 
 
 @pytest.mark.parametrize(
@@ -64,15 +65,33 @@ def test_save_and_load_dataset__format_3(tmp_path):
     assert_identical(ds, load_dataset(store, consolidated=False))
 
 
+@pytest.mark.parametrize("zarr_format", [2, 3])
+def test_save_and_load_dataset__strings(tmp_path, zarr_format):
+    text = np.array(["a", "abc"], dtype="T")
+    ds = xr.Dataset(
+        {"text": ("variants", text)},
+        coords={"variants": text, "variant_label": ("variants", text)},
+    )
+    ds = ds.chunk({"variants": 1})
+    store = tmp_path / "ds.zarr"
+    save_dataset(ds, store, zarr_format=zarr_format, consolidated=False)
+    ds2 = load_dataset(store, consolidated=False)
+    # NumPy strings are not loaded back as fixed-width Unicode
+    assert_identical(ds, ds2)
+
+    # save and load again, since loaded variables keep the encoding of the store
+    store2 = tmp_path / "ds2.zarr"
+    save_dataset(ds2, store2, zarr_format=zarr_format, consolidated=False)
+    assert_identical(ds, load_dataset(store2, consolidated=False))
+
+
 @pytest.mark.parametrize("dtype", [object, "T"])
 def test_save_dataset__vlen_utf8_filter(dtype):
     ds = xr.Dataset({"text": ("variants", ["a", "abc"])}).astype(dtype)
     ds["text"].encoding["filters"] = [numcodecs.VLenUTF8()]
     store = MemoryStore()
     save_dataset(ds, store)
-    assert ds["text"].encoding["filters"] == (
-        [] if dtype == "T" else [numcodecs.VLenUTF8()]
-    )
+    assert ds["text"].encoding == {"filters": [numcodecs.VLenUTF8()]}
     xr.testing.assert_identical(ds, load_dataset(store))
 
 

@@ -1,9 +1,12 @@
 from typing import Any, Dict, Optional
 
-import numcodecs
+import numpy as np
 import xarray as xr
 from xarray import Dataset
 from zarr.storage import StoreLike
+
+# The dtype Xarray uses for object arrays of variable-length strings
+VLEN_STR_DTYPE = np.dtype("O", metadata={"element_type": str})
 
 
 def save_dataset(
@@ -38,18 +41,19 @@ def save_dataset(
     """
     if auto_rechunk is None:
         auto_rechunk = False
-    for v in ds:
+    # Change the encoding on a shallow copy, so the caller's dataset is unchanged
+    ds = ds.copy()
+    for v in ds.variables:
         # Workaround for https://github.com/pydata/xarray/issues/4380
         ds[v].encoding.pop("chunks", None)
 
-        # Xarray writes native NumPy strings as fixed-width Unicode in format 2.
-        # A VLenUTF8 filter inherited from a variable-length array is then invalid.
+        # Workaround for https://github.com/pydata/xarray/issues/11848: Xarray
+        # writes NumPy StringDType arrays to Zarr format 2 as fixed-width Unicode,
+        # so ask for variable-length strings instead. Strings with a fill value
+        # load as objects, but keep StringDType as their encoding dtype.
         dtype = ds[v].encoding.get("dtype", ds[v].dtype)
-        filters = ds[v].encoding.get("filters")
-        if getattr(dtype, "kind", None) == "T" and filters is not None:
-            ds[v].encoding["filters"] = [
-                f for f in filters if f != numcodecs.VLenUTF8()
-            ]
+        if zarr_format == 2 and np.dtype(dtype).kind == "T":
+            ds[v].encoding["dtype"] = VLEN_STR_DTYPE
 
     if auto_rechunk:
         # This logic for checking if rechunking is necessary is
